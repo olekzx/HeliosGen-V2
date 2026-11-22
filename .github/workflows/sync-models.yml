@@ -1,0 +1,57 @@
+name: sync-models
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Daily at 04:00 UTC to catch new model releases automatically
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync Kie Model Catalog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Synchronize Kie model catalog
+        run: pnpm run sync-catalog
+        env:
+          KIE_API_KEY: ${{ secrets.KIE_API_KEY }}
+
+      - name: Run verification tests
+        run: pnpm test
+
+      - name: Commit and push catalog updates
+        run: |
+          if [[ -n $(git status --porcelain lib/models/kie-catalog.json) ]]; then
+            echo "New or updated models detected in catalog. Committing changes..."
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add lib/models/kie-catalog.json
+            git commit -m "chore(catalog): auto-sync latest Kie.ai model schemas [skip ci]"
+            git push origin main
+          else
+            echo "Model catalog is already up to date. No changes to commit."
+          fi
