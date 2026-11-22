@@ -4,6 +4,8 @@ import { pollKieJob } from "@/lib/kieJobPoller";
 import { rewriteLocalMediaForKie } from "@/lib/kieUpload";
 import { ensureR2 } from "@/lib/storage";
 import { VIDEO_MODELS } from "@/lib/modelConfig";
+import { getModelById } from "@/lib/models/catalog";
+import { buildUniversalTaskInput } from "@/lib/models/taskSerialization";
 import { getKieTokenForUser } from "@/lib/getKieToken";
 import { GUEST_USER_ID } from "@/lib/guestMode";
 import * as guestDb from "@/lib/guest/db";
@@ -46,6 +48,7 @@ export async function POST(req: NextRequest) {
     generationType: rawGenerationType,
     callBackUrl:    rawCallBackUrl,
     debugOnly       = false,
+    params          = {} as Record<string, unknown>,
   } = body;
 
   const userId = GUEST_USER_ID;
@@ -392,6 +395,19 @@ export async function POST(req: NextRequest) {
       { error: `Couldn't upload reference media to kie.ai: ${(e as Error).message}` },
       { status: 502 },
     );
+  }
+
+  // Merge schema-driven parameters from Dynamic Parameter Inspector
+  if (params && typeof params === "object") {
+    const catalogModel = getModelById(videoModel);
+    if (catalogModel) {
+      const serialized = buildUniversalTaskInput(catalogModel, { prompt, params });
+      for (const [k, v] of Object.entries(serialized)) {
+        if (input[k] === undefined && v !== undefined) {
+          input[k] = v;
+        }
+      }
+    }
   }
 
   // Submit task to kie.ai

@@ -14,7 +14,9 @@ import { browserNotify, requestNotificationPermission } from "@/lib/browserNotif
 
 type GenerateNodeType = Node<NodeData, "generateNode">;
 
-import { ShieldBan } from "lucide-react";
+import { ShieldBan, SlidersHorizontal } from "lucide-react";
+import DynamicParameterInspector from "@/components/DynamicParameterInspector";
+import { getModelById } from "@/lib/models/catalog";
 import { IMAGE_MODELS, AZURE_POPULAR_SIZES, validateAzureCustomSize } from "@/lib/modelConfig";
 import { PROVIDERS, ProviderId, getModelProvider, setModelProvider, modelHasProviderChoice } from "@/lib/providers";
 import { useGeneratingBorderAnimation } from "@/lib/useGeneratingBorderAnimation";
@@ -209,6 +211,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
   const [azureQualityOpen, setAzureQualityOpen] = useState(false);
   const [azureResolutionOpen, setAzureResolutionOpen] = useState(false);
   const [azureCustomSizeOpen, setAzureCustomSizeOpen] = useState(false);
+  const [paramsOpen, setParamsOpen] = useState(false);
   const [customWidthDraft, setCustomWidthDraft] = useState(1024);
   const [customHeightDraft, setCustomHeightDraft] = useState(1024);
   const [customSizeError, setCustomSizeError] = useState<string | null>(null);
@@ -391,6 +394,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
   }, [model]);
   const isAzureProvider = currentProvider === "azure";
   const isCodexProvider = currentProvider === "codex";
+  const catalogModel = getModelById(model);
 
   const promptInfo = (() => {
     const promptEdge = edges.find((e) => e.target === id && e.targetHandle === "prompt");
@@ -494,6 +498,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
     setRatioOpen(false);
     setQualityOpen(false);
     setAzureQualityOpen(false);
+    setParamsOpen(false);
   };
 
   // ── Poll /api/job-status while a taskId is pending ──────────────────────────
@@ -653,6 +658,7 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
       imageUrls: orderedUrls,
       aspectRatio,
       quality,
+      params: (data.params as Record<string, unknown>) ?? {},
       ...(isAzure ? {
         azureBaseUrl, azureDeployment, azureQuality, azureResolution,
         ...(aspectRatio === "custom" ? {
@@ -1406,7 +1412,66 @@ export default function GenerateNode({ id, data, selected }: NodeProps<GenerateN
           )}
 
 
+          {/* Schema-driven Parameters pill */}
+          {catalogModel && catalogModel.parameters.filter((p) => p.key !== "prompt").length > 0 && (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  setParamsOpen((o) => !o);
+                  setModelOpen(false);
+                  setRatioOpen(false);
+                  setQualityOpen(false);
+                  setAzureQualityOpen(false);
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-all ${paramsOpen ? "ring-1 ring-teal-400 bg-[#162032]" : "hover:brightness-125"}`}
+                style={{
+                  background: paramsOpen ? "rgba(20,30,50,0.85)" : "rgba(0,0,0,0.45)",
+                  backdropFilter: "blur(10px)",
+                  WebkitBackdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255,255,255,0.07)",
+                }}
+                title="Dynamic Parameter Inspector"
+              >
+                <SlidersHorizontal className="w-3 h-3 text-teal-400" />
+                <span className="text-[11px] text-white/70">Params</span>
+                {Object.keys((data.params as Record<string, unknown>) ?? {}).length > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                )}
+              </button>
+            </div>
+          )}
+
           </div>{/* end pills wrapper */}
+
+          {/* Dynamic Parameter Inspector Popup */}
+          {paramsOpen && catalogModel && (
+            <div
+              className="absolute bottom-full left-2 right-2 mb-2 z-[1002] shadow-2xl"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <DynamicParameterInspector
+                model={catalogModel}
+                params={(data.params as Record<string, unknown>) ?? {}}
+                onChange={(key, val) => {
+                  const currentParams = (data.params as Record<string, unknown>) ?? {};
+                  const nextParams = { ...currentParams, [key]: val };
+                  const updates: Partial<NodeData> = { params: nextParams };
+                  if (key === "aspect_ratio" || key === "image_size") {
+                    updates.aspectRatio = String(val);
+                  }
+                  if (key === "quality" || key === "resolution") {
+                    updates.quality = String(val);
+                  }
+                  updateNodeData(id, updates);
+                }}
+                onReset={() => updateNodeData(id, { params: {} })}
+                excludeKeys={["prompt"]}
+                disabled={busy}
+              />
+            </div>
+          )}
 
           {/* Batch count selector */}
           {!readOnly && (
