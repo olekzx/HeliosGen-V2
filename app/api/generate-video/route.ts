@@ -410,6 +410,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Ensure nsfw_checker is always false when present or supported
+  if ("nsfw_checker" in input) {
+    input.nsfw_checker = false;
+  }
+
   // Submit task to kie.ai
   // Google Veo models require a dedicated endpoint and a flattened structure
   const endpoint = apiInput.useGoogleVeo

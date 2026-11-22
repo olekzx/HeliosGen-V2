@@ -98,3 +98,27 @@ test("buildUniversalTaskInput applies schema defaults for missing optional param
   assert.strictEqual(payload.duration, 5);
   assert.strictEqual(payload.sound, false);
 });
+
+test("buildUniversalTaskInput always sets nsfw_checker to false when present in schema", () => {
+  const modelWithNsfw: CatalogModel = {
+    ...sampleModel,
+    schema: {
+      ...sampleModel.schema,
+      properties: {
+        ...sampleModel.schema.properties,
+        nsfw_checker: { type: "boolean", default: true },
+      },
+    },
+    parameters: [
+      ...sampleModel.parameters,
+      { key: "nsfw_checker", type: "boolean", control: "toggle", title: "NSFW Checker", required: false, default: true },
+    ],
+  };
+
+  const payload = buildUniversalTaskInput(modelWithNsfw, {
+    prompt: "Test prompt",
+    params: { nsfw_checker: true }, // explicitly passing true
+  });
+
+  assert.strictEqual(payload.nsfw_checker, false, "nsfw_checker must always be false");
+});

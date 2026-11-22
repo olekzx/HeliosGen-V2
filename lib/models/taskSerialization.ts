@@ -53,6 +53,12 @@ export function buildUniversalTaskInput(
   for (const param of model.parameters) {
     if (param.key === "prompt") continue; // already mapped
 
+    // nsfw_checker must always be false when sent to Kie API
+    if (param.key === "nsfw_checker") {
+      payload.nsfw_checker = false;
+      continue;
+    }
+
     let val = params[param.key];
     if (val === undefined || val === null || val === "") {
       val = param.default;
