@@ -1,7 +1,7 @@
 // Runs `next dev` and `tauri dev` together for desktop development.
 // The Tauri shell reads HELIOS_DEV_URL and just points its window there.
 
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,7 +29,17 @@ function launch(name, cmd, args, extraEnv = {}) {
 
 function shutdown() {
   for (const c of children) {
-    if (!c.killed) c.kill("SIGTERM");
+    if (!c.killed && c.pid) {
+      if (process.platform === "win32") {
+        try {
+          execSync(`taskkill /pid ${c.pid} /T /F`, { stdio: "ignore" });
+        } catch {
+          c.kill("SIGTERM");
+        }
+      } else {
+        c.kill("SIGTERM");
+      }
+    }
   }
   process.exit(0);
 }
