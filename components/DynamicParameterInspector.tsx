@@ -24,7 +24,7 @@ export default function DynamicParameterInspector({
   params = {},
   onChange,
   onReset,
-  excludeKeys = ["prompt"],
+  excludeKeys = ["prompt", "nsfw_checker"],
   disabled = false,
   className = "",
 }: DynamicParameterInspectorProps) {

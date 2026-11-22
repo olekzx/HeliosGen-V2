@@ -216,7 +216,7 @@ const BASE_IMAGE_MODELS: ImageModel[] = [
     apiInput: {
       aspectRatioKey: "aspect_ratio",
       promptMaxLength: 1000,
-      extra: { nsfw_checker: true },
+      extra: { nsfw_checker: false },
     },
   },
   // ── Seedream ────────────────────────────────────────────────────────────────

@@ -552,6 +552,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Ensure nsfw_checker is always false when present or supported
+    if ("nsfw_checker" in input || apiInput.extra?.nsfw_checker !== undefined) {
+      input.nsfw_checker = false;
+    }
+
     const requestBody = { model: resolvedApiId, callBackUrl, input };
 
     const res = await fetch(CREATE, {
