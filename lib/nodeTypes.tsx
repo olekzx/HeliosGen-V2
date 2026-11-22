@@ -123,8 +123,8 @@ export const NODES: Array<{
   ];
 
 const GEN_NODE_SETTINGS: Record<string, string[]> = {
-  generateNode: ["model", "aspectRatio", "quality", "azureQuality", "azureResolution"],
-  videoGeneratorNode: ["videoModel", "klingMode", "grokResolution", "duration", "aspectRatio", "sound"],
+  generateNode: ["model", "aspectRatio", "quality", "azureQuality", "azureResolution", "params"],
+  videoGeneratorNode: ["videoModel", "klingMode", "grokResolution", "duration", "aspectRatio", "sound", "params"],
 };
 
 /** Returns settings from the last existing node of `type` to seed a newly created one. */

@@ -9,7 +9,9 @@ import NodeActionBar from "./NodeActionBar";
 import { useWorkflowStore, NodeData } from "@/lib/store";
 import { resolveInputs } from "@/lib/executor";
 import { useReadOnly } from "@/lib/readOnlyContext";
-import { ShieldBan } from "lucide-react";
+import { ShieldBan, SlidersHorizontal } from "lucide-react";
+import DynamicParameterInspector from "@/components/DynamicParameterInspector";
+import { getModelById } from "@/lib/models/catalog";
 import { VIDEO_MODELS as VIDEO_MODEL_CFG } from "@/lib/modelConfig";
 import { useGeneratingBorderAnimation } from "@/lib/useGeneratingBorderAnimation";
 import MissingInputWarning from "./MissingInputWarning";
@@ -208,6 +210,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
   const [durOpen, setDurOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
   const [grokResOpen, setGrokResOpen] = useState(false);
+  const [paramsOpen, setParamsOpen] = useState(false);
   const muted = useWorkflowStore((s) => s.globalMuted);
   const setGlobalMuted = useWorkflowStore((s) => s.setGlobalMuted);
   const [hovering, setHovering] = useState(false);
@@ -231,27 +234,27 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
   useEffect(() => {
     const rfNode = cardRef.current?.closest<HTMLElement>(".react-flow__node");
     if (!rfNode) return;
-    const anyOpen = modelOpen || ratioOpen || durOpen || modeOpen || grokResOpen;
+    const anyOpen = modelOpen || ratioOpen || durOpen || modeOpen || grokResOpen || paramsOpen;
     if (anyOpen) {
       rfNode.style.zIndex = "10000";
     } else {
       rfNode.style.zIndex = "";
     }
     return () => { rfNode.style.zIndex = ""; };
-  }, [modelOpen, ratioOpen, durOpen, modeOpen, grokResOpen]);
+  }, [modelOpen, ratioOpen, durOpen, modeOpen, grokResOpen, paramsOpen]);
 
   useEffect(() => {
-    const anyOpen = modelOpen || ratioOpen || durOpen || modeOpen || grokResOpen;
+    const anyOpen = modelOpen || ratioOpen || durOpen || modeOpen || grokResOpen || paramsOpen;
     if (!anyOpen) return;
     const handler = (e: MouseEvent) => {
       if (controlBarRef.current && !controlBarRef.current.contains(e.target as unknown as globalThis.Node)) {
         setModelOpen(false); setRatioOpen(false); setDurOpen(false);
-        setModeOpen(false); setGrokResOpen(false);
+        setModeOpen(false); setGrokResOpen(false); setParamsOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [modelOpen, ratioOpen, durOpen, modeOpen, grokResOpen]);
+  }, [modelOpen, ratioOpen, durOpen, modeOpen, grokResOpen, paramsOpen]);
 
   const fmtTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
@@ -370,6 +373,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
   // ── Data ──────────────────────────────────────────────────────────────────
   const videoModelId = (data.videoModel as string) ?? "kling-3.0";
   const cfg = VIDEO_MODEL_CFG.find((m) => m.id === videoModelId) ?? VIDEO_MODEL_CFG[0];
+  const catalogModel = getModelById(videoModelId);
 
   const mode = (data.klingMode as string) ?? cfg.defaultMode ?? "";
   const resolution = (data.grokResolution as string) ?? cfg.defaultResolution ?? "";
@@ -987,6 +991,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
       startFrameUrl: finalStartFrameUrl,
       endFrameUrl: finalEndFrameUrl,
       referenceImageUrls: veoMode === "references" ? orderedResources.map(r => r.url).slice(0, 3) : undefined,
+      params: (data.params as Record<string, unknown>) ?? {},
     } : {
       videoModel: videoModelId,
       prompt: finalPrompt,
@@ -1005,6 +1010,7 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
       referenceVideoUrls: upstream.referenceVideoUrls.slice(0, maxRefVideos),
       referenceAudioUrls: upstream.referenceAudioUrls.slice(0, maxRefAudios),
       ...(cfg.supportsSeeds && seed ? { seed } : {}),
+      params: (data.params as Record<string, unknown>) ?? {},
     };
 
     if (debugMode) {
@@ -1964,7 +1970,66 @@ export default function VideoGeneratorNode({ id, data, selected }: NodeProps<Vid
                   </div>
                 )}
 
+                {/* Schema-driven Parameters pill */}
+                {catalogModel && catalogModel.parameters.filter((p) => p.key !== "prompt").length > 0 && (
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={() => {
+                        setParamsOpen((o) => !o);
+                        setModelOpen(false);
+                        setRatioOpen(false);
+                        setDurOpen(false);
+                        setModeOpen(false);
+                        setGrokResOpen(false);
+                      }}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-all ${paramsOpen ? "ring-1 ring-teal-400 bg-[#162032]" : "hover:brightness-125"}`}
+                      style={{
+                        background: paramsOpen ? "rgba(20,30,50,0.85)" : "rgba(0,0,0,0.45)",
+                        backdropFilter: "blur(10px)",
+                        WebkitBackdropFilter: "blur(10px)",
+                        border: "1px solid rgba(255,255,255,0.07)",
+                      }}
+                      title="Dynamic Parameter Inspector"
+                    >
+                      <SlidersHorizontal className="w-3 h-3 text-teal-400" />
+                      <span className="text-[11px] text-white/70">Params</span>
+                      {Object.keys((data.params as Record<string, unknown>) ?? {}).length > 0 && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                      )}
+                    </button>
+                  </div>
+                )}
+
               </div>{/* end pills wrapper */}
+
+              {/* Dynamic Parameter Inspector Popup */}
+              {paramsOpen && catalogModel && (
+                <div
+                  className="absolute bottom-full left-2 right-2 mb-2 z-[1002] shadow-2xl"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <DynamicParameterInspector
+                    model={catalogModel}
+                    params={(data.params as Record<string, unknown>) ?? {}}
+                    onChange={(key, val) => {
+                      const currentParams = (data.params as Record<string, unknown>) ?? {};
+                      const nextParams = { ...currentParams, [key]: val };
+                      const updates: Partial<NodeData> = { params: nextParams };
+                      if (key === "aspect_ratio") updates.aspectRatio = String(val);
+                      if (key === "duration") updates.duration = Number(val);
+                      if (key === "resolution") updates.grokResolution = String(val);
+                      if (key === "mode") updates.klingMode = String(val);
+                      if (key === "sound") updates.sound = Boolean(val);
+                      updateNodeData(id, updates);
+                    }}
+                    onReset={() => updateNodeData(id, { params: {} })}
+                    excludeKeys={["prompt"]}
+                    disabled={busy}
+                  />
+                </div>
+              )}
 
               {/* Batch count selector */}
               {!readOnly && (

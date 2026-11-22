@@ -6,6 +6,13 @@
 //   2. That's it. The UI and API routes read from this file automatically.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import {
+  getImageModels,
+  getVideoModels,
+  catalogModelToImageModel,
+  catalogModelToVideoModel,
+} from "./models/catalog";
+
 // ── Image models ──────────────────────────────────────────────────────────────
 
 export interface ImageModel {
@@ -126,7 +133,7 @@ export function validateAzureCustomSize(width: number, height: number): string |
   return null;
 }
 
-export const IMAGE_MODELS: ImageModel[] = [
+const BASE_IMAGE_MODELS: ImageModel[] = [
   // ── Google ──────────────────────────────────────────────────────────────────
   {
     id: "google-nano-banana",
@@ -510,7 +517,7 @@ export interface VideoModel {
   };
 }
 
-export const VIDEO_MODELS: VideoModel[] = [
+const BASE_VIDEO_MODELS: VideoModel[] = [
   // ── Google ──────────────────────────────────────────────────────────────────
   {
     id: "veo3_lite",
@@ -1030,4 +1037,24 @@ export const VIDEO_MODELS: VideoModel[] = [
       extra: { background_source: "input_video" }, // background_source not user-selectable yet — default to video background
     },
   },
+];
+
+const curatedImageIds = new Set(BASE_IMAGE_MODELS.map((m) => m.id));
+const curatedImageApiIds = new Set(BASE_IMAGE_MODELS.map((m) => m.apiId));
+
+export const IMAGE_MODELS: ImageModel[] = [
+  ...BASE_IMAGE_MODELS,
+  ...getImageModels()
+    .filter((m) => !curatedImageIds.has(m.id) && !curatedImageApiIds.has(m.model))
+    .map(catalogModelToImageModel),
+];
+
+const curatedVideoIds = new Set(BASE_VIDEO_MODELS.map((m) => m.id));
+const curatedVideoApiIds = new Set(BASE_VIDEO_MODELS.map((m) => m.apiId));
+
+export const VIDEO_MODELS: VideoModel[] = [
+  ...BASE_VIDEO_MODELS,
+  ...getVideoModels()
+    .filter((m) => !curatedVideoIds.has(m.id) && !curatedVideoApiIds.has(m.model))
+    .map(catalogModelToVideoModel),
 ];

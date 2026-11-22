@@ -11,6 +11,8 @@ import { pollKieJob } from "@/lib/kieJobPoller";
 import { ensureKieReachableImages } from "@/lib/kieUpload";
 import { ensureR2, uploadBuffer } from "@/lib/storage";
 import { IMAGE_MODELS, validateAzureCustomSize } from "@/lib/modelConfig";
+import { getModelById } from "@/lib/models/catalog";
+import { buildUniversalTaskInput } from "@/lib/models/taskSerialization";
 import { getKieTokenForUser } from "@/lib/getKieToken";
 import { getAzureKeyForUser } from "@/lib/getAzureKey";
 import { GUEST_USER_ID } from "@/lib/guestMode";
@@ -286,12 +288,14 @@ export async function POST(req: NextRequest) {
     azureCustomHeight,
     codexProvider,
     debugOnly,
+    params,
   } = (await req.json()) as {
     model?:              string;
     prompt?:             string;
     imageUrls?:          string[];
     aspectRatio?:        string;
     quality?:            string;
+    params?:             Record<string, unknown>;
     azureQuality?:       string;     // "auto" | "low" | "medium" | "high"
     azureResolution?:    string;     // "1k" | "2k" | "4k"
     azureBaseUrl?:       string;     // global base URL from settings
@@ -530,6 +534,23 @@ export async function POST(req: NextRequest) {
         : quality === "4k" ? "4K" : quality === "2k" ? "2K" : quality === "1k" ? "1K" : quality;
     }
     if (apiInput.extra) Object.assign(input, apiInput.extra);
+
+    // Merge schema-driven parameters from Dynamic Parameter Inspector
+    if (params && typeof params === "object") {
+      const catalogModel = getModelById(model);
+      if (catalogModel) {
+        const serialized = buildUniversalTaskInput(catalogModel, {
+          prompt,
+          params,
+          mediaInputs: apiInput.imageInputKey && hasImages ? { [apiInput.imageInputKey]: kieImageUrls } : {},
+        });
+        for (const [k, v] of Object.entries(serialized)) {
+          if (input[k] === undefined && v !== undefined) {
+            input[k] = v;
+          }
+        }
+      }
+    }
 
     const requestBody = { model: resolvedApiId, callBackUrl, input };
 
