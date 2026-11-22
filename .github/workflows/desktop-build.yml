@@ -44,11 +44,17 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Disable Spotlight indexing (macOS)
+        if: runner.os == 'macOS'
+        run: sudo mdutil -a -i off
+
       - name: Install dependencies
         run: pnpm install
 
       - name: Build desktop application
         run: pnpm desktop:build
+        env:
+          CI: true
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

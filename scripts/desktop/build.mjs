@@ -13,7 +13,7 @@ execFileSync(process.execPath, [join(ROOT, "scripts", "desktop", "check-version.
   stdio: "inherit",
 });
 
-// 2. Run Tauri build with CI=true
+// 2. Run Tauri build with CI=true and macOS retry resilience
 const tauriBin = join(
   ROOT,
   "node_modules",
@@ -28,11 +28,24 @@ if (process.platform === "win32") {
   args = ["/d", "/s", "/c", tauriBin, ...args];
 }
 
-execFileSync(file, args, {
-  cwd: ROOT,
-  stdio: "inherit",
-  env: {
-    ...process.env,
-    CI: "true",
-  },
-});
+const maxRetries = process.platform === "darwin" ? 2 : 1;
+for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  try {
+    execFileSync(file, args, {
+      cwd: ROOT,
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        CI: "true",
+      },
+    });
+    break;
+  } catch (err) {
+    if (attempt < maxRetries) {
+      console.warn(`[desktop:build] Build failed on attempt ${attempt}, retrying in 3 seconds...`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000);
+      continue;
+    }
+    throw err;
+  }
+}
