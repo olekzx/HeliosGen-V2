@@ -12,7 +12,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const REPO = "SegFault42/HeliosGen";
+const REPO = process.env.HELIOS_REPO || "olekzx/HeliosGen-V2";
 const RELEASES_API = `https://api.github.com/repos/${REPO}/releases/latest`;
 const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h — GitHub unauthenticated limit is 60/h
