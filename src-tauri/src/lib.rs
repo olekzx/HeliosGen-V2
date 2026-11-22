@@ -43,6 +43,7 @@ fn pick_port() -> u16 {
 /// user-installed CLIs the server shells out to (ffmpeg, ffprobe, codex,
 /// codex-imagegen) go missing. Recover the interactive login shell's PATH and
 /// fold in a few common bin dirs.
+#[cfg(not(windows))]
 fn resolve_user_path() -> String {
     let base = std::env::var("PATH").unwrap_or_default();
 
@@ -77,6 +78,24 @@ fn resolve_user_path() -> String {
     parts.join(":")
 }
 
+#[cfg(windows)]
+fn resolve_user_path() -> String {
+    let base = std::env::var_os("PATH").unwrap_or_default();
+    let mut paths: Vec<std::path::PathBuf> = std::env::split_paths(&base).collect();
+
+    // On Windows GUI apps inherit the full PATH, but we ensure .cargo/bin is included if available.
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        let cargo_bin = std::path::PathBuf::from(format!("{profile}\\.cargo\\bin"));
+        if !paths.contains(&cargo_bin) {
+            paths.push(cargo_bin);
+        }
+    }
+
+    std::env::join_paths(paths)
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|_| base.to_string_lossy().to_string())
+}
+
 /// Same problem as `resolve_user_path`, for a single scalar var: a GUI-launched
 /// app doesn't source `.zshrc`, so overrides like `CODEX_IMAGEGEN_MODEL` set
 /// there never reach the sidecar unless we go fetch them from the login shell.
@@ -86,14 +105,21 @@ fn resolve_user_env_var(name: &str) -> Option<String> {
             return Some(v);
         }
     }
-    let sh = std::env::var("SHELL").ok()?;
-    std::process::Command::new(sh)
-        .args(["-lic", &format!("printf %s \"${name}\"")])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .filter(|s| !s.is_empty())
+    #[cfg(unix)]
+    {
+        let sh = std::env::var("SHELL").ok()?;
+        std::process::Command::new(sh)
+            .args(["-lic", &format!("printf %s \"${name}\"")])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
 }
 
 /// Block until the sidecar is accepting connections (or give up after `timeout`).

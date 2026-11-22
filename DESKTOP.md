@@ -44,9 +44,9 @@ hosted/web deployment.
 
 | Tool | Notes |
 | --- | --- |
-| **Rust** | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` (installed: rustc 1.98). |
+| **Rust** | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` or `winget install Rustlang.Rustup` on Windows. |
 | **Node 22+** | Repo's `pnpm@9.15.9` needs Node ≥ 22.13. `nvm use 22 && corepack enable`. |
-| **Tauri system deps** | macOS: Xcode CLT. Linux: webkit2gtk + build-essential. See <https://v2.tauri.app/start/prerequisites/>. |
+| **Tauri system deps** | Windows: Microsoft Visual Studio C++ Build Tools & WebView2. macOS: Xcode CLT. Linux: webkit2gtk + build-essential. See <https://v2.tauri.app/start/prerequisites/>. |
 
 App icons are already generated in `src-tauri/icons/` from `src-tauri/icon-source.png`
 (a 1024² render of `public/HG.svg`). To regenerate after a logo change:
@@ -70,20 +70,23 @@ compiles the Rust shell (~1–2 min).
 
 ```bash
 pnpm desktop:build            # → src-tauri/target/release/bundle/
-open "src-tauri/target/release/bundle/macos/HeliosGen.app"
 ```
 
-- macOS: produces `HeliosGen.app` and (with `CI=true`, which the script sets)
+- **Windows**: produces `bundle/nsis/HeliosGen_<ver>_x64-setup.exe`.
+  Data lives in `%APPDATA%\cash.sdd.helios.desktop\`:
+  `guest.db` (SQLite) and `generated\` (media).
+- **macOS**: produces `HeliosGen.app` and (with `CI=true`, which the script sets)
   `HeliosGen_<ver>_aarch64.dmg`. The `.app` is ~440 MB (bundled Node runtime +
   prod `node_modules`).
-- The app is **unsigned** — on first launch macOS Gatekeeper blocks it.
+- The macOS app is **unsigned** — on first launch macOS Gatekeeper blocks it.
   Right-click → Open, or `xattr -cr "src-tauri/target/release/bundle/macos/HeliosGen.app"`.
-- Data lives in `~/Library/Application Support/cash.sdd.helios.desktop/`:
+- macOS data lives in `~/Library/Application Support/cash.sdd.helios.desktop/`:
   `guest.db` (SQLite — generations, uploads, folders, workflows, settings) and
   `generated/` (media). Delete that folder to reset.
 
 To just run the compiled binary without bundling:
-`./src-tauri/target/release/heliosgen-desktop`
+- Windows: `.\src-tauri\target\release\heliosgen-desktop.exe`
+- macOS/Linux: `./src-tauri/target/release/heliosgen-desktop`
 
 ## Signed & notarized release build
 

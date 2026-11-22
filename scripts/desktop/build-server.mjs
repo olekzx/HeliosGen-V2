@@ -17,7 +17,7 @@ import {
   writeFileSync,
   readdirSync,
 } from "node:fs";
-import { join, dirname, sep } from "node:path";
+import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -52,6 +52,9 @@ function stageShim(triple) {
 
 if (process.argv.includes("--dev")) {
   console.log("[desktop] dev mode — run `next dev` yourself (pnpm desktop:dev does both)");
+  mkdirSync(STAGE, { recursive: true });
+  const keep = join(STAGE, ".gitkeep");
+  if (!existsSync(keep)) writeFileSync(keep, "");
   stageShim(targetTriple());
   process.exit(0);
 }
@@ -64,11 +67,16 @@ if (nodeMajor < 22) {
 }
 
 function run(cmd, args, env = {}, cwd = ROOT) {
-  execFileSync(cmd, args, {
+  let file = cmd;
+  let finalArgs = args;
+  if (process.platform === "win32" && (cmd === "npm" || cmd.endsWith(".cmd") || cmd.endsWith(".bat"))) {
+    file = "cmd.exe";
+    finalArgs = ["/d", "/s", "/c", cmd, ...args];
+  }
+  execFileSync(file, finalArgs, {
     cwd,
     stdio: "inherit",
     env: { ...process.env, ...env },
-    shell: process.platform === "win32",
   });
 }
 
@@ -115,13 +123,16 @@ if (!existsSync(join(STANDALONE, "server.js"))) {
 
 console.log("[desktop] staging server →", STAGE);
 cpSync(STANDALONE, STAGE, { recursive: true });
-rmSync(join(STAGE, "src-tauri"), { recursive: true, force: true }); // never nest ourselves
+// Clean up unnecessary source directories copied by Next.js file tracing
+for (const dir of ["src-tauri", "app", "components", "hooks", "lib", "scripts"]) {
+  rmSync(join(STAGE, dir), { recursive: true, force: true });
+}
 cpSync(join(ROOT, ".next", "static"), join(STAGE, ".next", "static"), { recursive: true });
 copyFileSync(join(ROOT, "scripts", "desktop", "sidecar-guard.js"), join(STAGE, "sidecar-guard.js"));
 if (existsSync(join(ROOT, "public"))) {
   cpSync(join(ROOT, "public"), join(STAGE, "public"), {
     recursive: true,
-    filter: (src) => !src.includes(`${sep}public${sep}generated`), // runtime data, not an asset
+    filter: (src) => !src.replace(/\\/g, "/").includes("/public/generated"), // runtime data, not an asset
   });
 }
 
@@ -129,17 +140,17 @@ if (existsSync(join(ROOT, "public"))) {
 // leaves many packages as a bare package.json. Rather than chase truncations,
 // throw away the traced node_modules and do a clean production install from the
 // app's own manifest, giving a flat, symlink-free, self-contained tree.
-// nft is unreliable with pnpm (leaves packages truncated), so install the prod
-// tree cleanly with npm instead. The repo is pnpm-managed with a stale
-// package-lock.json, and `next build` output is tied to the EXACT `next` version
-// that produced it — so pin every prod dep to the version actually installed in
-// the repo before installing, rather than letting npm re-resolve `^` ranges.
+// Next.js standalone bundles all page and client components into .next/server and
+// .next/static. Only the actual server-side runtime packages need to exist in node_modules.
 console.log("[desktop] clean production install into stage…");
 rmSync(join(STAGE, "node_modules"), { recursive: true, force: true });
+
+const RUNTIME_DEPS = new Set(["next", "react", "react-dom", "sharp", "undici"]);
 
 const rootPkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 const pinned = {};
 for (const name of Object.keys(rootPkg.dependencies ?? {})) {
+  if (!RUNTIME_DEPS.has(name)) continue;
   try {
     const v = JSON.parse(
       readFileSync(join(ROOT, "node_modules", ...name.split("/"), "package.json"), "utf8"),

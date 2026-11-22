@@ -1,3 +1,6 @@
+// Prevents a console window on Windows in release builds.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 //! Sidecar shim for the bundled Next.js server.
 //!
 //! Tauri puts `externalBin` sidecars in `HeliosGen.app/Contents/MacOS/`. macOS
@@ -65,7 +68,19 @@ fn main() {
 
     #[cfg(not(unix))]
     {
-        match std::process::Command::new(&node).args(&args).status() {
+        #[cfg(windows)]
+        use std::os::windows::process::CommandExt;
+
+        let mut cmd = std::process::Command::new(&node);
+        cmd.args(&args);
+
+        #[cfg(windows)]
+        {
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        match cmd.status() {
             Ok(status) => std::process::exit(status.code().unwrap_or(1)),
             Err(err) => {
                 eprintln!("[helios-node] failed to spawn node: {err}");
