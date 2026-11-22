@@ -57,10 +57,48 @@ jobs:
           path: ${{ matrix.platform.artifact-path }}
           if-no-files-found: error
 
-      - name: Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name "*.exe" -o -name "*.dmg" \) -exec cp {} release-assets/ \;
+          echo "Assets to publish:"
+          ls -lh release-assets
+
+      - name: Determine tag and release name
+        id: release_info
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+            NAME="HeliosGen ${TAG}"
+          else
+            TAG="v${VERSION}-build.${{ github.run_number }}"
+            NAME="HeliosGen v${VERSION} (Build #${{ github.run_number }})"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "name=${NAME}" >> $GITHUB_OUTPUT
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.platform.artifact-path }}
+          tag_name: ${{ steps.release_info.outputs.tag }}
+          name: ${{ steps.release_info.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          files: release-assets/*
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
