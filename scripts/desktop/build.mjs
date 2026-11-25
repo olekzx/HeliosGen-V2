@@ -2,6 +2,7 @@
 // Runs the version check and invokes `tauri build` with CI=true.
 
 import { execFileSync } from "node:child_process";
+import { copyFileSync, cpSync, readdirSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -49,3 +50,14 @@ for (let attempt = 1; attempt <= maxRetries; attempt++) {
     throw err;
   }
 }
+
+const releaseDir = join(ROOT, "src-tauri", "target", "release");
+const binaryDir = join(ROOT, "src-tauri", "binaries");
+const sidecar = readdirSync(binaryDir).find((name) => name.startsWith("helios-node-"));
+if (!sidecar) throw new Error(`Staged sidecar not found in ${binaryDir}`);
+
+const releaseServer = join(releaseDir, "server");
+rmSync(releaseServer, { recursive: true, force: true });
+cpSync(join(ROOT, "src-tauri", "server"), releaseServer, { recursive: true });
+copyFileSync(join(binaryDir, sidecar), join(releaseDir, process.platform === "win32" ? "helios-node.exe" : "helios-node"));
+console.log(`[desktop:build] Unbundled executable ready at ${releaseDir}`);
